@@ -1,4 +1,4 @@
-import { Component } from 'react';
+import { useState, useEffect } from 'react';
 import Notiflix from 'notiflix';
 import { Container } from './components/Container';
 import { Searchbar } from './components/Searchbar/Searchbar';
@@ -8,116 +8,97 @@ import * as API from './api/api';
 import { Modal } from './components/Modal';
 import { Loader } from 'components/Loader';
 
-export class App extends Component {
-  state = {
-    q: '',
-    items: [],
-    page: 1,
-    isShowModal: false,
-    loading: false,
-    totalHits: null,
-    lastPage: null,
-  };
+export const App = () => {
+  const [q, setQ] = useState('');
+  const [items, setItems] = useState([]);
+  const [page, setPage] = useState(1);
+  const [isShowModal, setIsShowModal] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [total, setTotal] = useState(null);
+  const [lastPage, setLastPage] = useState(null);
+  const [largeImageURL, setLargeImageURL] = useState(null);
+  const [alt, setAlt] = useState(null);
 
-  async componentDidUpdate(prevProps, prevState) {
-    const { q, page } = this.state;
-    if (prevState.q !== q || prevState.page !== page) {
-      this.setState({ loading: true });
+  useEffect(() => {
+    const onFetch = async () => {
+      if (q === '') {
+        return;
+      }
+      if (q !== '' || page !== 1) {
+        setLoading(true);
+      }
       try {
-        if (q === '') {
-          return this.setState({
-            items: [],
-            q: '',
-          });
-        }
         const { hits, totalHits } = await API.getImages({ q, page });
-        if (totalHits || hits.length) {
+
+        if (page >= 1) {
+          setTotal(totalHits);
+          setLastPage(Math.ceil(total / 12));
+          setItems(state => (page === 1 ? hits : [...state, ...hits]));
           if (page === 1) {
             Notiflix.Notify.success(` We found ${totalHits} images.`);
           }
-          if (page >= 1) {
-            this.setState({
-              totalHits: totalHits,
-              lastPage: Math.ceil(totalHits / 12),
-            });
-          }
         }
+
         if (hits.length < 12) {
           Notiflix.Notify.failure(`Sorry no more found images for "${q}"`);
         }
-        this.setState({
-          items: prevState.q !== q ? hits : [...prevState.items, ...hits],
-        });
       } catch (error) {
         Notiflix.Notify.failure('Last page');
       } finally {
-        this.setState({ loading: false });
+        setLoading(false);
       }
-    }
-  }
+    };
+    onFetch();
+  }, [q, page, total]);
 
-  onFormSubmit = values => {
-    const { q } = this.state;
+  const onFormSubmit = values => {
     if (values === q && values !== '') {
       Notiflix.Notify.failure('Please entry new name');
-      return this.setState({
-        items: [],
-        q: '',
-        page: 1,
-        totalHits: null,
-      });
+      setItems([]);
+      setQ('');
+      setPage(1);
+      setTotal(null);
+      return;
     }
     if (values === '') {
-      this.setState({
-        items: [],
-        q: '',
-        page: 1,
-      });
+      setItems([]);
+      setQ('');
+      setPage(1);
       Notiflix.Notify.failure('Please entry name');
+      return;
     }
-    this.setState({
-      q: values,
-      page: 1,
-    });
+
+    setQ(values);
+    setPage(1);
   };
 
-  onToggleModal = e => {
-    this.setState(({ isShowModal }) => ({
-      isShowModal: !isShowModal,
-    }));
-    if (!this.state.isShowModal) {
-      this.setState({
-        largeImageURL: e.target.dataset.set,
-        alt: e.target.alt,
-      });
+  const onToggleModal = e => {
+    setIsShowModal(!isShowModal);
+    if (isShowModal) {
+      setLargeImageURL(e.target.dataset.set);
+      setAlt(e.target.alt);
     }
   };
 
-  onloadMore = () => {
-    this.setState(prevState => ({
-      page: prevState.page + 1,
-    }));
+  const onloadMore = () => {
+    setPage(prevState => prevState + 1);
   };
 
-  render() {
-    const { items, isShowModal, largeImageURL, alt, loading, page, lastPage } =
-      this.state;
-    return (
-      <Container>
-        <Searchbar onSubmit={this.onFormSubmit} />
-        {loading && <Loader />}
-        {items.length !== 0 && (
-          <ImageGallery images={items} onClick={this.onToggleModal} />
-        )}
-        {isShowModal && (
-          <Modal onClose={this.onToggleModal}>
-            <img src={largeImageURL} alt={alt} />
-          </Modal>
-        )}
-        {items.length >= 12 && page !== lastPage && (
-          <Button onClick={this.onloadMore}>Load more</Button>
-        )}
-      </Container>
-    );
-  }
-}
+  return (
+    <Container>
+      <Searchbar onSubmit={onFormSubmit} />
+      {loading && <Loader />}
+      {items.length !== 0 && (
+        <ImageGallery images={items} onClick={onToggleModal} />
+      )}
+      {isShowModal && (
+        <Modal onClose={onToggleModal}>
+          <img src={largeImageURL} alt={alt} />
+        </Modal>
+      )}
+      {items.length >= 12 && page !== lastPage && (
+        <Button onClick={onloadMore}>Load more</Button>
+      )}
+    </Container>
+  );
+};
